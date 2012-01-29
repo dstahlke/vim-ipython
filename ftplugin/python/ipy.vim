@@ -419,10 +419,10 @@ if !exists('g:ipy_perform_mappings')
     let g:ipy_perform_mappings = 1
 endif
 if g:ipy_perform_mappings != 0
-    map <silent> <F5> :python run_this_file()<CR>
-    map <silent> <S-F5> :python run_this_line()<CR>
+    map <silent> <F5> <Plug>IPyRunFile
+    map <silent> <S-F5> <Plug>IPyRunLine
     map <silent> <F9> :python run_these_lines()<CR>
-    map <silent> <leader>d :py get_doc_buffer()<CR>
+    map <silent> <leader>d <Plug>IPyDocWord
     map <silent> <leader>s :py update_subchannel_msgs(); echo("vim-ipython shell updated",'Operator')<CR>
     map <silent> <S-F9> :python toggle_reselect()<CR>
     "map <silent> <C-F6> :python send('%pdb')<CR>
@@ -439,10 +439,17 @@ if g:ipy_perform_mappings != 0
     "" Example of how to quickly close all figures with a keystroke
     "map <silent> <F11> :python run_command("plt.close('all')")<cr>
 
+	" <leader>p runs command from a visual selection or a motion.
+	" For example, <leader>piw to execute a word.
+    vmap <silent> <leader>p <Plug>IPyRunSel
+    nmap <silent> <leader>p <Plug>IPyRunSel
+    " <leader>pp runs one line (analogous to e.g. "dd")
+    nmap <silent> <leader>pp <Plug>IPyRunLine
+
     "pi custom
-    map <silent> <C-Return> :python run_this_file()<CR>
-    map <silent> <C-s> :python run_this_line()<CR>
-    imap <silent> <C-s> <C-O>:python run_this_line()<CR>
+    map <silent> <C-Return> <Plug>IpyRunFile
+    map <silent> <C-s> <Plug>IPyRunLine
+    imap <silent> <C-s> <Plug>IPyRunLine
     map <silent> <M-s> :python dedent_run_this_line()<CR>
     vmap <silent> <C-S> :python run_these_lines()<CR>
     vmap <silent> <M-s> :python dedent_run_these_lines()<CR>
@@ -451,6 +458,15 @@ if g:ipy_perform_mappings != 0
     map <silent> <M-C> :s/^\([ \t]*\)#/\1/<CR>
     vmap <silent> <M-C> :s/^\([ \t]*\)#/\1/<CR>
 endif
+
+nnoremap <Plug>IPyRunFile :py run_this_file()<CR>
+noremap  <Plug>IPyRunLine :python run_this_line()<CR>
+inoremap <Plug>IPyRunLine <C-\><C-O>:python run_this_line()<CR>
+" See: http://learnvimscriptthehardway.stevelosh.com/chapters/34.html
+" And: :help map
+vnoremap <Plug>IPyRunSel :<C-U>call <SID>IPythonRunOp(visualmode(), 1)<cr>
+nnoremap <Plug>IPyRunSel :set operatorfunc=<SID>IPythonRunOp<cr>g@
+nnoremap <Plug>IPyDocWord :py get_doc_buffer()<CR>
 
 command! -nargs=* IPython :py km_from_string("<args>")
 command! -nargs=0 IPythonClipboard :py km_from_string(vim.eval('@+'))
@@ -519,3 +535,30 @@ endpython
 	  endif
 	endfun
 set completefunc=CompleteIPython
+
+" Only create function if it doesn't already exist.  It isn't sufficient to
+" just use "function!" since the function may already be referenced by
+" operatorfunc, and vim doesn't allow redefining the function in that case.
+if !exists('*s:IPythonRunOp')
+function s:IPythonRunOp(type, ...)
+    let saved_unnamed_register = @@
+
+    if a:0  " Invoked from Visual mode, use '< and '> marks.
+        exe "silent normal! `<" . a:type . "`>y"
+    elseif a:type ==# 'char'
+        silent normal! `[v`]y
+    elseif a:type == 'line'
+        silent normal! '[V']y
+    elseif a:type == 'block'
+        silent normal! `[\<C-V>`]y
+    else
+        echo "error: type=".a:type." a:0=".a:0
+        return
+    endif
+
+    "echo "0: ".a:0." t: ".a:type." @: ".@@
+    python run_command(vim.eval('@@'))
+
+    let @@ = saved_unnamed_register
+endfunction
+endif
